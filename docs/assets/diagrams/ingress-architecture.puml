@@ -1,11 +1,10 @@
-@startuml Authentication Architecture
+@startuml Ingress Architecture
 !theme plain
 
 skinparam rectangle {
     BackgroundColor<<tcp>> LightBlue
     BackgroundColor<<mtls>> LightGreen
-    BackgroundColor<<auth>> LightYellow
-    BackgroundColor<<external>> White
+    BackgroundColor<<gateway>> LightGray
     BorderColor Black
 }
 
@@ -15,6 +14,10 @@ skinparam component {
 }
 
 package "Single Cluster (CSC or CPC)" {
+
+    rectangle "Gateway API Controller" <<gateway>> {
+        component "Gateway" as gateway_ingress
+    }
 
     rectangle "Main NATS Cluster" <<tcp>> {
         component "MQTT/TCP Endpoint\nmqtt.bus.dc.svc.cluster.local" as mqtt_tcp
@@ -32,27 +35,22 @@ package "Single Cluster (CSC or CPC)" {
         mqtt_mtls -[hidden]down- nats_leaf_tcp
     }
 
-    rectangle "Auth Callout Service" <<auth>> {
-        component "Auth Handler\n(OAuth2, mTLS, NKey)" as auth_handler
-    }
+    actor "Internal\nMQTT Client" as int_client_tcp
+    actor "Internal\nMQTT Client" as int_client_mtls
 
-    ' Connections
-    nats_leaf_tcp -[#blue,bold]-> nats_tcp : "Leaf Node\nConnection"
+    nats_leaf_tcp -[#blue,bold]-> nats_tcp : "Leaf Node\nConnection\n(NATS/TCP)"
 
-    auth_handler -[#red,dashed]-> nats_tcp : "Register Handler\n(NATS/TCP)"
+    gateway_ingress -down-> mqtt_tcp : "TCP"
+    gateway_ingress -down-> mqtt_mtls : "mTLS"
 
-    ' External clients
-    actor "MQTT Client" as client_tcp
-    actor "MQTT Client" as client_mtls
-
-    client_tcp -down-> mqtt_tcp : "TCP"
-    client_mtls -down-> mqtt_mtls : "mTLS"
+    int_client_tcp -down-> mqtt_tcp : "TCP\n(direct)"
+    int_client_mtls -down-> mqtt_mtls : "mTLS\n(direct)"
 }
 
-rectangle "Vault" <<external>> as vault
-rectangle "OAuth2 Provider" <<external>> as oauth2
+actor "External\nMQTT Client" as ext_client_tls
+actor "External\nMQTT Client" as ext_client_mtls
 
-auth_handler -[#green]-> vault : "Vault Issued CA"
-auth_handler -[#orange]-> oauth2 : "OAuth2 JWKS"
+ext_client_tls -down-> gateway_ingress : "TLS"
+ext_client_mtls -down-> gateway_ingress : "mTLS"
 
 @enduml
