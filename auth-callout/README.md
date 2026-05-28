@@ -2,21 +2,22 @@
 
 NATS auth callout service for JWT-based authentication.
 
-[[_TOC_]]
-
 ## Deployment
 
-See [deploy/README.md](./deploy/README.md) for Helm chart configuration.
+See [deploy/README.md](./deploy/README.md) for the auth-callout Helm chart.
+The umbrella chart at `deploy/nats-event-bus/` includes auth-callout as a
+subchart — when deploying via the umbrella chart, configure auth-callout values
+under the `auth-callout:` key in the umbrella values.
+
+For operator-facing authentication configuration (auth modes, permissions,
+secrets), see [docs/authentication.md](../docs/authentication.md).
 
 ## Configuration
 
-The auth callout connects to a NATS server and handles authentication requests. It requires:
-
-- **NATS server** with [auth callout](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_callout) enabled
-- **NKey seeds** for NATS connection and JWT signing
-- **OIDC provider** (for OAuth2) or **CA certificate** (for mTLS)
-
-Two config files are required: `config.yaml` (service config) and `permissions.json` (client mappings).
+The auth-callout service reads two config files: `config.yaml` (service config)
+and `permissions.json` (client mappings). In a Helm deployment the chart
+templates both from values; the structure below is the reference for
+understanding what the chart produces.
 
 ### Service Config
 
@@ -53,26 +54,9 @@ observability:
     enabled: false
 ```
 
-### Generating NKeys
+### NKey Seeds
 
-The service requires NKey seeds for NATS authentication. Generate using [nsc](https://github.com/nats-io/nsc):
-
-```bash
-# Install nsc
-go install github.com/nats-io/nsc/v2@latest
-
-# User NKey (for nkey-seed) - connects to NATS
-nsc generate nkey --user
-# Output: seed (SU...) and public key (U...)
-
-# Account signing key (for issuer-seed) - signs user JWTs
-nsc generate nkey --account
-# Output: seed (SA...) and public key (A...)
-
-# XKey (for xkey-seed, optional) - encrypts auth callout responses
-nsc generate nkey --curve
-# Output: seed (SX...) and public key (X...)
-```
+The service requires three NKey seeds for NATS authentication:
 
 | Key | Seed Prefix | Public Key Prefix | Purpose |
 |-----|-------------|-------------------|---------|
@@ -81,16 +65,17 @@ nsc generate nkey --curve
 | `xkey-seed` | `SX` | `X` | Encrypts responses (optional) |
 
 Seeds are secrets (store in Vault). Public keys are configured in NATS server.
-
-See [NATS NKeys documentation](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth).
+See [docs/pre-deployment.md](../docs/pre-deployment.md) for the full key
+inventory and generation script.
 
 ### Permissions Config
 
-Client mappings in `permissions.json`. Each auth type (`oauth2`, `mtls`, `nkey`) is a map of client entries.
+Client mappings in `permissions.json`. Each auth type (`oauth2`, `mtls`, `nkey`)
+is a map of client entries.
 
-**Environment Variable Expansion**: String values support `${VAR}` syntax for fields like `public_key`, `account`, `identity`, `subject`, and `azp`. JSON Keys are not expanded, just values.
-
-**Example configuration:**
+**Environment Variable Expansion**: String values support `${VAR}` syntax for
+fields like `public_key`, `account`, `identity`, `subject`, and `azp`. JSON
+keys are not expanded, just values.
 
 ```json
 {
@@ -101,14 +86,6 @@ Client mappings in `permissions.json`. Each auth type (`oauth2`, `mtls`, `nkey`)
       "permissions": {
         "pub": { "allow": ["events.>"] },
         "sub": { "allow": ["notifications.>"] }
-      }
-    },
-    "admin-client": {
-      "azp": "admin-client-id",
-      "account": "ADMIN",
-      "permissions": {
-        "pub": { "allow": [">"] },
-        "sub": { "allow": [">"] }
       }
     }
   },
@@ -142,8 +119,6 @@ Client mappings in `permissions.json`. Each auth type (`oauth2`, `mtls`, `nkey`)
 }
 ```
 
-**Auth Types:**
-
 | Type | Identifier Field | Description |
 |------|------------------|-------------|
 | `oauth2` | `azp` or `subject` | JWT token validated via JWKS |
@@ -151,15 +126,9 @@ Client mappings in `permissions.json`. Each auth type (`oauth2`, `mtls`, `nkey`)
 | `nkey` | `public_key` | NATS NKey public key |
 | `noauth` | (none) | Anonymous access fallback |
 
-**Permission Fields:**
-
-- `pub.allow` - subjects the client can publish to
-- `sub.allow` - subjects the client can subscribe to
-- `resp` (optional) - request-reply settings (`max`, `ttl`)
-
 Subject wildcards: `*` matches one token, `>` matches one or more tokens.
 
-See [NATS Authorization](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/authorization) for details.
+See https://docs.nats.io/running-a-nats-service/configuration/securing_nats/authorization for details.
 
 ## Development
 
@@ -201,7 +170,7 @@ make lint         # Lint code
 
 ### Metrics
 
-Prometheus metrics at `http://auth-callout.127-0-0-1.nip.io:9090/metrics`
+Prometheus metrics at `http://auth-callout.127-0-0-1.nip.io:9090/metrics`.
 
 **Auth Callout** (appear after requests):
 
@@ -246,4 +215,3 @@ Prometheus metrics at `http://auth-callout.127-0-0-1.nip.io:9090/metrics`
 | `process_start_time_seconds` | gauge | Process start time |
 | `process_network_receive_bytes_total` | counter | Network bytes received |
 | `process_network_transmit_bytes_total` | counter | Network bytes sent |
- 
