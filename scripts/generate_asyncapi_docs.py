@@ -29,7 +29,7 @@ DOCS = ROOT / "docs"
 
 SPECS = {
     "bms": ROOT / "schemas" / "asyncapi" / "bms" / "bms.yaml",
-    "dsxflex": ROOT / "schemas" / "asyncapi" / "dsxflex" / "dsxflex.yaml",
+    "dsx-flex": ROOT / "schemas" / "asyncapi" / "dsx-flex" / "dsx-flex.yaml",
     "nico": ROOT / "schemas" / "asyncapi" / "nico" / "nico.yaml",
     "spiffe-exchange": ROOT / "schemas" / "asyncapi" / "spiffe-exchange" / "pub-keysets.yaml",
 }
